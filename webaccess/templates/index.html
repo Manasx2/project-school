@@ -2,77 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Speech Recognition and TTS</title>
     <style>
-        #recognized-text-box {
-            width: 100%;
-            height: 100px;
+        #output {
             border: 1px solid #ccc;
             padding: 10px;
             margin-top: 10px;
+            width: 300px;
+            height: 100px;
             overflow-y: auto;
-            background-color: #f9f9f9;
+        }
+        #recognitionStatus {
+            font-weight: bold;
+            color: green;
         }
     </style>
 </head>
 <body>
-    <h1>Speech-to-Text and Text-to-Speech</h1>
-    
-    <button onclick="startRecognition()">Start Speech Recognition</button>
-    <div id="recognized-text-box">Recognized text will appear here.</div>
-
-    <input type="text" id="text-input" placeholder="Enter text for TTS" />
-    <button onclick="startTTS()">Play Text-to-Speech</button>
+    <h1>Speech Recognition and TTS Output</h1>
+    <button id="startRecognition">Start Recognition</button>
+    <div id="recognitionStatus"></div>
+    <div id="output"></div>
+    <audio id="audioPlayer" controls></audio>
 
     <script>
-        let recognition;
-        let recognitionTimeout;
+        const audioPlayer = document.getElementById('audioPlayer');
+        const outputDiv = document.getElementById('output');
+        const recognitionStatus = document.getElementById('recognitionStatus');
+        const audioSourceUrl = '/audio'; // Endpoint for audio
 
-        function startRecognition() {
-            // Initialize the SpeechRecognition object
-            recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            recognition.lang = 'en-US';
-            
-            // When recognition gets a result, update the text box
-            recognition.onresult = (event) => {
-                const text = event.results[0][0].transcript;
-                document.getElementById('recognized-text-box').innerText = text;
+        // Check for speech recognition support
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
 
-                // Send the recognized text to the server
-                fetch('/process_text', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
-                })
-                .then(response => response.json())
-                .then(data => console.log(data));
-            };
+        recognition.continuous = false; // Do not continue recognition after the first result
+        recognition.interimResults = false; // Only final results
+        recognition.lang = 'en-US'; // Set language
 
-            // Handle errors
-            recognition.onerror = (event) => {
-                console.error("Speech recognition error:", event.error);
-            };
-
-            // Start the speech recognition
+        // Start recognition
+        document.getElementById('startRecognition').onclick = function() {
             recognition.start();
-            
-            // Set a timeout to stop recognition after 5 seconds
-            recognitionTimeout = setTimeout(() => {
-                recognition.stop();
-            }, 5000);  // 5000 ms = 5 seconds
-        }
-
-        // Stop recognition if it's still running
-        recognition.onend = () => {
-            clearTimeout(recognitionTimeout);
+            recognitionStatus.innerText = "Listening...";
+            setTimeout(() => {
+                recognition.stop(); // Stop after 10 seconds
+            }, 10000); // Timeout of 10 seconds
         };
 
-        // Text-to-Speech (TTS)
-        function startTTS() {
-            const text = document.getElementById('text-input').value;
-            const utterance = new SpeechSynthesisUtterance(text);
-            window.speechSynthesis.speak(utterance);
+        // Handle results
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript; // Get the recognized text
+            outputDiv.innerText = transcript; // Display recognized text
+            recognitionStatus.innerText = "Recognition completed.";
+            savePrompt(transcript); // Save to prompt.txt
+        };
+
+        // Handle errors
+        recognition.onerror = function(event) {
+            recognitionStatus.innerText = "Error occurred in recognition: " + event.error;
+        };
+
+        // Save recognized text to prompt.txt
+        function savePrompt(text) {
+            fetch('/save_prompt', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt: text })
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Prompt saved successfully');
+                } else {
+                    console.error('Error saving prompt');
+                }
+            })
+            .catch(error => console.error('Error saving prompt:', error));
         }
+
+        // Function to fetch text output
+        function fetchOutput() {
+            fetch('/output')
+                .then(response => response.json())
+                .then(data => {
+                    outputDiv.innerText = data.text;
+                })
+                .catch(error => console.error('Error fetching output:', error));
+        }
+
+        // Check for audio
+        function checkForAudio() {
+            fetch(audioSourceUrl)
+                .then(response => {
+                    if (response.ok) {
+                        audioPlayer.src = audioSourceUrl + '?' + new Date().getTime(); // Prevent caching
+                        audioPlayer.play();
+                    } else {
+                        console.log('Audio file not found or not yet generated.');
+                    }
+                })
+                .catch(error => console.error('Error fetching audio:', error));
+        }
+
+        // Set interval to check for updates every second
+        setInterval(() => {
+            fetchOutput();
+            checkForAudio();
+        }, 1000);
     </script>
 </body>
 </html>

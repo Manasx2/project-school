@@ -2,7 +2,7 @@ import time
 import os
 from transformers import pipeline
 
-def load_prompt_from_file(filename="recognized_text.txt"):
+def load_prompt_from_file(filename="prompt.txt"):
     try:
         with open(filename, "r") as f:
             prompt = f.read().strip()
@@ -20,7 +20,7 @@ def generate_response(prompt, conversation_history):
     full_prompt = "\n".join(conversation_history + [prompt])
     
     # Generate conversational response with truncation
-    result = generator(full_prompt, max_length=150, truncation=True, temperature=0.7, top_k=50)
+    result = generator(full_prompt, max_length=150, truncation=True)
     response = result[0]["generated_text"].strip()
     
     print("Generated response:", response)
@@ -39,7 +39,7 @@ def main():
 
     while True:
         # Check for file modification
-        current_modified_time = os.path.getmtime("recognized_text.txt")
+        current_modified_time = os.path.getmtime("prompt.txt")
         
         if current_modified_time != last_modified_time:
             # Update the last modified time
